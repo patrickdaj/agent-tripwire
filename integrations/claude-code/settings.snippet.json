@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|WebFetch|WebSearch|Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agent-tripwire-gate --adapter claude-code",
+            "timeout": 30,
+            "statusMessage": "agent-tripwire: gating tool call"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agent-tripwire-gate --adapter claude-code",
+            "timeout": 30,
+            "statusMessage": "agent-tripwire: screening prompt"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read|WebFetch|Bash|WebSearch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agent-tripwire-gate --adapter claude-code",
+            "timeout": 30,
+            "statusMessage": "agent-tripwire: screening tool output"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agent-tripwire-gate --adapter claude-code",
+            "timeout": 60,
+            "statusMessage": "agent-tripwire: auditing session"
+          }
+        ]
+      }
+    ]
+  }
+}

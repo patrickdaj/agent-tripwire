@@ -28,6 +28,7 @@ pretty = [
 dev = [
     { name = "pytest" },
     { name = "rich" },
+    { name = "tenacity" },
 ]
 
 [package.metadata]
@@ -44,6 +45,7 @@ provides-extras = ["litellm", "pretty"]
 dev = [
     { name = "pytest" },
     { name = "rich", specifier = ">=13" },
+    { name = "tenacity" },
 ]
 
 [[package]]

@@ -22,13 +22,15 @@ litellm = ["litellm>=1.50", "instructor>=1.0", "tenacity"]
 pretty = ["rich>=13"]
 
 # Dev toolchain as a PEP 735 dependency group — `uv sync` installs it by default.
-# `rich` is intentionally duplicated with the `pretty` extra so the test suite can
-# exercise the colored render path.
+# `rich` is duplicated with the `pretty` extra, and `tenacity` with the `litellm` extra,
+# so the test suite can exercise the colored render path and the litellm retry path
+# (which fakes litellm/instructor but uses real tenacity) without installing an extra.
 [dependency-groups]
-dev = ["pytest", "rich>=13"]
+dev = ["pytest", "rich>=13", "tenacity"]
 
 [project.scripts]
 agent-tripwire = "agent_tripwire.__main__:main"
+agent-tripwire-gate = "agent_tripwire.hook_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_tripwire"]

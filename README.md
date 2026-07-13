@@ -115,6 +115,39 @@ shape. Those print `✗`. **Those misses are the point, not failures** — they 
 falsifiable instead of self-confirming, and they're the honest baseline a real model has to
 beat. A `✗` never fails the run (if it did, we'd be tempted to curate easy inputs).
 
+## Enforcing it — coding-agent hooks
+
+The detectors also run as **enforcement** inside a coding agent, not just as an offline
+report. A harness-agnostic gate turns each detector verdict into an operator decision
+(`allow` / `warn` / `block` / `confirm`) at the moment the agent acts:
+
+| surface | detector | when |
+|---|---|---|
+| a tool call about to run | `classify` | before execution |
+| a submitted prompt | `detect_injection` | before it reaches the model |
+| content a tool returned | `detect_injection` | before the model reads it |
+| a model output | `flag_output` | before it leaves |
+| the whole session | `audit_transcript` | at session end (report-only) |
+
+Two stances shape the gate:
+
+- **Tiered.** The free offline mocks run first; a mock *hit* decides immediately, a mock
+  *miss* (the known-unreliable case) escalates to a fast model when `AGENT_TRIPWIRE_MODEL`
+  is set. Unset it for offline mock-only mode.
+- **Fail-closed.** Any internal failure — unknown surface, detector error, escalation
+  failure, exceeded deadline — resolves to `block`, never a silent allow. The sanctioned
+  escape hatch for a false positive is `AGENT_TRIPWIRE_MODE=mock-only|off`, a visible,
+  reversible downgrade rather than ripping the hooks out.
+
+One CLI, `agent-tripwire-gate`, speaks a neutral JSON protocol any harness can call. Two
+integrations ship today:
+
+- **Claude Code** — hooks + a ready-to-paste settings block:
+  [`integrations/claude-code/`](integrations/claude-code/README.md)
+- **OpenCode** — a dependency-free plugin: [`integrations/opencode/`](integrations/opencode/README.md)
+
+A third harness is a thin adapter over the same gate, not a rewrite.
+
 ## What's deferred to later pieces
 
 This slice is intentionally tiny. Not here yet: the golden set, scoring / pass-rate metrics,
