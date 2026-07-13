@@ -16,9 +16,36 @@ as **block** — there is no input, however malformed, that yields silence-plus-
 
 import argparse
 import json
+import os
 import sys
 
 from .gate import GateDecision, Intervention, evaluate
+
+# The protocol JSON is written to a saved dup of the original stdout fd. `isolate_stdout()`
+# creates it and hands fd 1 to stderr, so anything a library writes to stdout — including
+# litellm's banner, emitted at the fd level below `sys.stdout` — lands on stderr and can
+# never corrupt the single-JSON-line protocol. The saved fd lives on `sys` (a true
+# singleton), not a module global: running via `python -m` loads this module twice
+# (`__main__` + the package copy the adapter re-imports), and only a `sys` attribute is
+# shared across both. Absent (not isolated, e.g. in-process tests) it defaults to fd 1.
+_STDOUT_FD_ATTR = "_agent_tripwire_stdout_fd"
+
+
+def isolate_stdout() -> None:
+    """Save the real stdout fd and point fd 1 at stderr for the rest of the process.
+
+    Done once, on the main thread, before any evaluation — so the fds are stable and the
+    deadline's worker thread never touches them (no race with the fail-closed emit). This
+    is the only reliable defense against a library that writes to fd 1 directly; a
+    Python-level `redirect_stdout` can't see those writes."""
+    setattr(sys, _STDOUT_FD_ATTR, os.dup(1))  # saved original stdout — protocol goes here
+    os.dup2(2, 1)                              # fd 1 now == stderr; stray noise is diverted
+
+
+def emit_stdout(text: str) -> None:
+    """Write one protocol line to the saved real stdout at the fd level. A dead stdout
+    raises here, inside the caller's no-silent-success backstop."""
+    os.write(getattr(sys, _STDOUT_FD_ATTR, 1), (text + "\n").encode())
 
 
 def _emergency_block(reason: str) -> GateDecision:
@@ -44,8 +71,7 @@ def _neutral(stdin_text: str) -> int:
             decision = _emergency_block(
                 f"expected a JSON object GateRequest, got {type(request).__name__}"
             )
-    print(decision.model_dump_json())
-    sys.stdout.flush()  # surface a dead stdout HERE, inside the no-silent-success backstop
+    emit_stdout(decision.model_dump_json())
     return 0
 
 
@@ -58,6 +84,7 @@ def main() -> None:
     args = ap.parse_args()
 
     try:
+        isolate_stdout()  # divert any library stdout noise before we evaluate anything
         stdin_text = sys.stdin.read()
         if args.adapter == "claude-code":
             from .adapters.claude_code import handle_event

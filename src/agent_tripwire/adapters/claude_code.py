@@ -25,9 +25,12 @@ _NON_ALLOW = {"warn", "confirm", "block"}
 
 
 def _emit(obj: dict) -> int:
-    """Write a JSON hook response to stdout and return exit code 0."""
-    print(json.dumps(obj))
-    sys.stdout.flush()  # surface a dead stdout inside the caller's no-silent-success backstop
+    """Write a JSON hook response to the true stdout and return exit code 0. Routes
+    through the gateway's `emit_stdout` so library stdout redirects on the model path
+    can't corrupt or swallow the response (see emit_stdout for why `sys.__stdout__`)."""
+    from ..hook_cli import emit_stdout
+
+    emit_stdout(json.dumps(obj))
     return 0
 
 

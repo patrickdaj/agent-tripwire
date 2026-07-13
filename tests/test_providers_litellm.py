@@ -80,6 +80,12 @@ def test_request_is_typed_to_schema_and_returns_field_dict(monkeypatch):
     assert call["model"] == "some-model"
 
 
+# Note: litellm's "Give Feedback" banner is written at the *fd level* (below sys.stdout),
+# so it cannot be contained here in the provider — it is diverted by the gateway's
+# process-level stdout isolation instead. See
+# tests/test_hook_cli.py::test_gateway_diverts_fd_level_stdout_noise.
+
+
 def test_temperature_400_retries_without_temperature(monkeypatch):
     providers._NO_TEMPERATURE.discard("temp-model")
     fake_ll = _fake_litellm()

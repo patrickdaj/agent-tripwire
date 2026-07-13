@@ -86,6 +86,33 @@ def test_adapter_unknown_event_blocks_end_to_end():
     assert proc.returncode == 2 and "blocked" in proc.stderr
 
 
+def test_gateway_diverts_fd_level_stdout_noise():
+    # litellm writes its banner directly to fd 1 (below sys.stdout). Simulate that: patch
+    # the gateway's evaluate to write to fd 1 mid-call, then return a decision. The
+    # gateway's stdout isolation must divert the fd-1 noise to stderr and keep stdout a
+    # single clean JSON line — otherwise a coding-agent hook reads "no decision" (fail-open).
+    prog = (
+        "import os, sys\n"
+        "from agent_tripwire import hook_cli\n"
+        "from agent_tripwire.gate import GateDecision, Intervention\n"
+        "def fake(req):\n"
+        "    os.write(1, b'GIVE-FEEDBACK-BANNER-TO-FD1\\n')\n"
+        "    return GateDecision(decision=Intervention.allow, rationale='ok')\n"
+        "hook_cli.evaluate = fake\n"
+        "sys.argv = ['agent-tripwire-gate']\n"
+        "hook_cli.main()\n"
+    )
+    import os
+    env = {k: v for k, v in os.environ.items() if not k.startswith("AGENT_TRIPWIRE_")}
+    proc = subprocess.run([sys.executable, "-c", prog],
+                          input=json.dumps({"surface": "prompt", "payload": "hi"}),
+                          capture_output=True, text=True, timeout=60, env=env)
+    assert proc.returncode == 0
+    assert "GIVE-FEEDBACK-BANNER" not in proc.stdout        # fd-1 noise kept off stdout
+    assert "GIVE-FEEDBACK-BANNER" in proc.stderr            # ...diverted to stderr
+    assert json.loads(proc.stdout)["decision"] == "allow"   # stdout is exactly the decision
+
+
 def test_no_silent_success_on_unwritable_stdout():
     # Close stdout at the OS level so even the emergency path cannot emit a decision:
     # the contract demands a non-zero exit and a one-line stderr, never silence + 0.
